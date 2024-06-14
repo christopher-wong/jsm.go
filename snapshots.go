@@ -492,7 +492,7 @@ func (s *Stream) SnapshotToDirectory(ctx context.Context, dir string, opts ...Sn
 }
 
 // SnapshotToBuffer creates a compressed s2 backup and writes to an io.Writer
-func (s *Stream) SnapshotToBuffer(ctx context.Context, dataBuffer, metadataBuffer io.WriteCloser, opts ...SnapshotOption) error {
+func (s *Stream) SnapshotToBuffer(ctx context.Context, dataBuffer, metadataBuffer io.WriteCloser, opts ...SnapshotOption) (SnapshotProgress, error) {
 	sopts := &snapshotOptions{
 		jsck:      false,
 		consumers: false,
@@ -504,8 +504,7 @@ func (s *Stream) SnapshotToBuffer(ctx context.Context, dataBuffer, metadataBuffe
 		opt(sopts)
 	}
 
-	_, err := s.createSnapshot(ctx, dataBuffer, metadataBuffer, sopts)
-	return err
+	return s.createSnapshot(ctx, dataBuffer, metadataBuffer, sopts)
 }
 
 func (m *Manager) restoreSnapshot(ctx context.Context, stream string, dataReader, metadataReader io.ReadCloser, sopts *snapshotOptions) (RestoreProgress, *api.StreamState, error) {
