@@ -22,14 +22,18 @@ import (
 	"log"
 	"math"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
 
 	"github.com/klauspost/compress/s2"
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 
 	"github.com/nats-io/jsm.go/api"
@@ -492,7 +496,7 @@ func (s *Stream) SnapshotToDirectory(ctx context.Context, dir string, opts ...Sn
 }
 
 // SnapshotToBuffer creates a compressed s2 backup and writes to an io.Writer
-func (s *Stream) SnapshotToBuffer(ctx context.Context, dataBuffer, metadataBuffer io.WriteCloser, opts ...SnapshotOption) error {
+func (s *Stream) SnapshotToBuffer(ctx context.Context, dataBuffer, metadataBuffer io.WriteCloser, opts ...SnapshotOption) (SnapshotProgress, error) {
 	sopts := &snapshotOptions{
 		jsck:      false,
 		consumers: false,
@@ -504,8 +508,7 @@ func (s *Stream) SnapshotToBuffer(ctx context.Context, dataBuffer, metadataBuffe
 		opt(sopts)
 	}
 
-	_, err := s.createSnapshot(ctx, dataBuffer, metadataBuffer, sopts)
-	return err
+	return s.createSnapshot(ctx, dataBuffer, metadataBuffer, sopts)
 }
 
 func (m *Manager) restoreSnapshot(ctx context.Context, stream string, dataReader, metadataReader io.ReadCloser, sopts *snapshotOptions) (RestoreProgress, *api.StreamState, error) {
@@ -755,6 +758,14 @@ func (s *Stream) SnapshotToBufferOld(ctx context.Context, dataBuffer, metadataBu
 	progress.notify()
 
 	sub, err := s.mgr.nc.Subscribe(ib, func(m *nats.Msg) {
+		clientInfoHeader := m.Header.Get(server.ClientInfoHdr)
+
+		// if the server returns a non-204 status code in the message header, return an error
+		if !strings.Contains(clientInfoHeader, strconv.Itoa(http.StatusNoContent)) {
+			errc <- errors.New(clientInfoHeader)
+			return
+		}
+
 		if len(m.Data) == 0 {
 			m.Sub.Unsubscribe()
 			cancel()
