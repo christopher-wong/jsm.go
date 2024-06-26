@@ -24,6 +24,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -397,6 +398,15 @@ func (s *Stream) createSnapshot(ctx context.Context, dataBuffer, metadataBuffer 
 		if len(m.Data) == 0 {
 			m.Sub.Unsubscribe()
 			cancel()
+
+			clientInfoHeader := m.Header.Get(ClientInfoHdr)
+
+			// if the server returns a non-204 status code in the message header, return an error
+			if clientInfoHeader != "" && !strings.Contains(clientInfoHeader, "204") {
+				errc <- errors.New(clientInfoHeader)
+				return
+			}
+
 			return
 		}
 
